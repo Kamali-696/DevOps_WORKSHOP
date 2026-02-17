@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IT Universe — Domain Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --cyan: #00f5ff;
+    --magenta: #ff00e5;
+    --green: #00ff88;
+    --yellow: #ffe600;
+    --purple: #a855f7;
+    --orange: #ff6b00;
+    --blue: #0066ff;
+    --red: #ff2244;
+    --bg: #030508;
+    --card-bg: rgba(5, 12, 25, 0.85);
+    --glow-cyan: 0 0 10px #00f5ff, 0 0 30px #00f5ff55, 0 0 60px #00f5ff22;
+    --glow-magenta: 0 0 10px #ff00e5, 0 0 30px #ff00e555, 0 0 60px #ff00e522;
+    --glow-green: 0 0 10px #00ff88, 0 0 30px #00ff8855, 0 0 60px #00ff8822;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: #e0e8ff;
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  #cursor {
+    width: 18px; height: 18px;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    position: fixed; pointer-events: none; z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s, background 0.2s;
+    box-shadow: var(--glow-cyan);
+  }
+  #cursor-dot {
+    width: 5px; height: 5px;
+    background: var(--cyan);
+    border-radius: 50%;
+    position: fixed; pointer-events: none; z-index: 9999;
+    transform: translate(-50%, -50%);
+    box-shadow: var(--glow-cyan);
+  }
+
+  /* Starfield */
+  #stars {
+    position: fixed; inset: 0; z-index: 0;
+    overflow: hidden; pointer-events: none;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    animation: twinkle var(--d) ease-in-out infinite alternate;
+  }
+  @keyframes twinkle {
+    0%   { opacity: 0.1; transform: scale(0.8); }
+    100% { opacity: 1;   transform: scale(1.2); }
+  }
+
+  /* Grid scanlines */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,245,255,0.012) 2px, rgba(0,245,255,0.012) 4px);
+  }
+
+  /* Floating orbs */
+  .orb {
+    position: fixed; border-radius: 50%; filter: blur(80px);
+    pointer-events: none; z-index: 0; animation: orbFloat var(--od) ease-in-out infinite alternate;
+  }
+  @keyframes orbFloat {
+    from { transform: translate(0,0) scale(1); }
+    to   { transform: translate(var(--tx), var(--ty)) scale(1.15); }
+  }
+
+  /* Header */
+  header {
+    position: relative; z-index: 10;
+    text-align: center;
+    padding: 60px 20px 30px;
+  }
+  .header-sub {
+    font-family: 'Rajdhani', sans-serif;
+    letter-spacing: 8px;
+    font-size: 0.85rem;
+    color: var(--cyan);
+    text-transform: uppercase;
+    animation: fadeIn 1s ease;
+    margin-bottom: 16px;
+    text-shadow: var(--glow-cyan);
+  }
+  h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(2rem, 6vw, 4.5rem);
+    font-weight: 900;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 50%, var(--green) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+    background-size: 200% auto;
+    line-height: 1.1;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+  .header-desc {
+    font-size: 1.1rem;
+    color: rgba(200,220,255,0.65);
+    margin-top: 14px;
+    letter-spacing: 2px;
+  }
+
+  /* Glitter line */
+  .glitter-line {
+    margin: 30px auto;
+    width: 60%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--magenta), var(--green), transparent);
+    position: relative;
+    animation: lineGlow 3s ease-in-out infinite;
+  }
+  @keyframes lineGlow {
+    0%,100% { box-shadow: 0 0 8px var(--cyan), 0 0 20px var(--cyan); }
+    50%      { box-shadow: 0 0 8px var(--magenta), 0 0 20px var(--magenta); }
+  }
+
+  /* Domain grid */
+  .grid {
+    position: relative; z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 24px;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+
+  /* Domain card */
+  .domain-card {
+    position: relative;
+    background: var(--card-bg);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 32px 24px 28px;
+    cursor: none;
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), box-shadow 0.3s;
+    animation: cardReveal 0.6s ease both;
+    backdrop-filter: blur(10px);
+  }
+  @keyframes cardReveal {
+    from { opacity:0; transform: translateY(30px) scale(0.95); }
+    to   { opacity:1; transform: translateY(0) scale(1); }
+  }
+  .domain-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--clr1), var(--clr2), transparent);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    opacity: 0.5;
+    transition: opacity 0.3s;
+  }
+  .domain-card:hover::before { opacity: 1; }
+  .domain-card::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle at center, var(--clr1) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  .domain-card:hover::after { opacity: 0.06; }
+  .domain-card:hover {
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 0 30px var(--clr1), 0 0 60px var(--clr1-faint, rgba(0,245,255,0.1));
+  }
+
+  /* Glitter particles on card */
+  .card-glitter {
+    position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: 16px;
+  }
+  .glitter-p {
+    position: absolute;
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: white;
+    opacity: 0;
+    animation: glitterAnim var(--gd) ease-in-out infinite;
+  }
+  @keyframes glitterAnim {
+    0%,100% { opacity: 0; transform: scale(0.5); }
+    50%      { opacity: var(--go); transform: scale(1.5); }
+  }
+
+  .domain-icon {
+    font-size: 2.5rem;
+    margin-bottom: 16px;
+    display: block;
+    filter: drop-shadow(0 0 10px var(--clr1));
+    animation: iconPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes iconPulse {
+    0%,100% { transform: scale(1);    filter: drop-shadow(0 0 8px var(--clr1)); }
+    50%      { transform: scale(1.08); filter: drop-shadow(0 0 20px var(--clr1)); }
+  }
+  .domain-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--clr1);
+    text-shadow: 0 0 10px var(--clr1);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .domain-tagline {
+    font-size: 0.85rem;
+    color: rgba(200,220,255,0.55);
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+  }
+  .card-arrow {
+    position: absolute; bottom: 18px; right: 20px;
+    font-size: 1.1rem;
+    color: var(--clr1);
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .domain-card:hover .card-arrow { opacity: 1; transform: translate(3px, -3px); }
+
+  /* Modal overlay */
+  #modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+  }
+  #modal-overlay.open { display: flex; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  #modal {
+    position: relative;
+    background: rgba(4, 10, 22, 0.97);
+    border-radius: 20px;
+    width: min(800px, 94vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 48px 40px 40px;
+    border: 1px solid rgba(255,255,255,0.1);
+    animation: modalIn 0.4s cubic-bezier(.34,1.56,.64,1);
+    scrollbar-width: thin;
+    scrollbar-color: var(--modal-clr, var(--cyan)) transparent;
+  }
+  @keyframes modalIn {
+    from { transform: scale(0.85) translateY(30px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  #modal::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: 20px;
+    background: radial-gradient(ellipse at top left, var(--modal-clr-faint, rgba(0,245,255,0.07)) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .modal-close {
+    position: absolute; top: 18px; right: 22px;
+    background: none; border: none;
+    color: rgba(200,220,255,0.5);
+    font-size: 1.6rem; cursor: none;
+    transition: color 0.2s, transform 0.2s;
+    font-family: 'Rajdhani', sans-serif;
+    line-height: 1;
+  }
+  .modal-close:hover { color: white; transform: rotate(90deg); }
+
+  .modal-header { display: flex; align-items: center; gap: 20px; margin-bottom: 28px; }
+  .modal-icon { font-size: 3rem; filter: drop-shadow(0 0 16px var(--modal-clr, var(--cyan))); }
+  .modal-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.3rem, 3vw, 2rem);
+    font-weight: 900;
+    color: var(--modal-clr, var(--cyan));
+    text-shadow: 0 0 20px var(--modal-clr, var(--cyan));
+    letter-spacing: 3px;
+  }
+  .modal-tagline {
+    font-size: 1rem;
+    color: rgba(200,220,255,0.6);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .modal-divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--modal-clr, var(--cyan)), transparent);
+    margin-bottom: 28px;
+    box-shadow: 0 0 10px var(--modal-clr, var(--cyan));
+  }
+
+  .modal-section { margin-bottom: 28px; }
+  .modal-section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    color: var(--modal-clr, var(--cyan));
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    opacity: 0.9;
+  }
+  .modal-section p {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: rgba(215,230,255,0.82);
+    letter-spacing: 0.3px;
+  }
+
+  .skills-grid {
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .skill-tag {
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    border: 1px solid var(--modal-clr, var(--cyan));
+    color: var(--modal-clr, var(--cyan));
+    background: rgba(0,0,0,0.3);
+    text-shadow: 0 0 8px var(--modal-clr, var(--cyan));
+    box-shadow: 0 0 8px rgba(0,0,0,0) inset;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .skill-tag:hover {
+    background: rgba(255,255,255,0.06);
+    box-shadow: 0 0 12px var(--modal-clr, var(--cyan)) inset;
+  }
+
+  .career-list {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .career-item {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.92rem;
+    color: rgba(200,220,255,0.75);
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .career-item::before {
+    content: '▶';
+    color: var(--modal-clr, var(--cyan));
+    font-size: 0.6rem;
+    filter: drop-shadow(0 0 4px var(--modal-clr, var(--cyan)));
+    flex-shrink: 0;
+  }
+
+  .stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
+  .stat-box {
+    flex: 1; min-width: 120px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--modal-clr, var(--cyan));
+    text-shadow: 0 0 12px var(--modal-clr, var(--cyan));
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    letter-spacing: 1.5px;
+    color: rgba(200,220,255,0.45);
+    margin-top: 4px;
+    text-transform: uppercase;
+  }
+
+  /* Floating glitter confetti */
+  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+  .conf {
+    position: absolute;
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    animation: confFall var(--cf) linear infinite;
+    opacity: 0;
+  }
+  @keyframes confFall {
+    0%   { transform: translateY(-10px) rotate(0deg); opacity: 0.8; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* Search bar */
+  .search-wrap {
+    position: relative; z-index: 10;
+    max-width: 500px; margin: 0 auto 40px;
+    padding: 0 24px;
+  }
+  .search-input {
+    width: 100%;
+    background: rgba(5,12,25,0.8);
+    border: 1px solid rgba(0,245,255,0.3);
+    border-radius: 40px;
+    padding: 14px 52px 14px 24px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem;
+    color: #e0e8ff;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+  .search-input:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(0,245,255,0.2);
+  }
+  .search-input::placeholder { color: rgba(150,170,220,0.4); }
+  .search-icon {
+    position: absolute; right: 40px; top: 50%;
+    transform: translateY(-50%);
+    color: rgba(0,245,255,0.5);
+    font-size: 1.1rem;
+    pointer-events: none;
+  }
+
+  @media(max-width:600px){
+    #modal { padding: 36px 22px 30px; }
+    .career-list { grid-template-columns: 1fr; }
+    .stat-row { gap:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-dot"></div>
+<div id="stars"></div>
+<div id="confetti"></div>
+
+<!-- Floating orbs -->
+<div class="orb" style="width:400px;height:400px;background:rgba(0,245,255,0.07);top:-100px;left:-100px;--od:8s;--tx:40px;--ty:30px;"></div>
+<div class="orb" style="width:300px;height:300px;background:rgba(255,0,229,0.06);bottom:-80px;right:-80px;--od:10s;--tx:-30px;--ty:-20px;"></div>
+<div class="orb" style="width:250px;height:250px;background:rgba(0,255,136,0.05);top:50%;left:50%;--od:12s;--tx:20px;--ty:-40px;"></div>
+
+<header>
+  <p class="header-sub">⚡ Interactive Knowledge System ⚡</p>
+  <h1>IT UNIVERSE</h1>
+  <p class="header-desc">Click any domain to explore its universe</p>
+  <div class="glitter-line"></div>
+</header>
+
+<div class="search-wrap">
+  <input type="text" class="search-input" id="searchInput" placeholder="Search domains..."/>
+  <span class="search-icon">🔍</span>
+</div>
+
+<div class="grid" id="domainGrid"></div>
+
+<!-- Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const domains = [
+  {
+    id: 'cyber',
+    icon: '🛡️',
+    name: 'Cybersecurity',
+    tagline: 'Guardians of the digital realm',
+    color: '#00f5ff',
+    overview: 'Cybersecurity is the practice of protecting systems, networks, and programs from digital attacks. It encompasses a wide range of technologies, processes, and practices designed to defend computers, servers, mobile devices, electronic systems, and data from malicious threats and unauthorized access.',
+    skills: ['Ethical Hacking','Network Security','Cryptography','Penetration Testing','SIEM Tools','Incident Response','Firewall Config','Zero Trust','OWASP','SOC Analysis'],
+    careers: ['SOC Analyst','Pen Tester','CISO','Security Architect','Malware Analyst','Bug Bounty Hunter','Forensics Expert','IAM Engineer'],
+    stats: { growth: '35%', avgSalary: '$115K', remoteWork: '80%', entryLevel: '6mo–2yr' }
+  },
+  {
+    id: 'ai',
+    icon: '🤖',
+    name: 'Artificial Intelligence',
+    tagline: 'Teaching machines to think',
+    color: '#ff00e5',
+    overview: 'Artificial Intelligence is the simulation of human intelligence by machines. It covers machine learning, deep learning, natural language processing, and computer vision — transforming industries from healthcare to autonomous vehicles with intelligent systems that learn and adapt.',
+    skills: ['Python','PyTorch','TensorFlow','NLP','Computer Vision','Reinforcement Learning','Data Pipelines','Model Deployment','LLMs','MLOps'],
+    careers: ['ML Engineer','Data Scientist','AI Researcher','NLP Engineer','Computer Vision Eng','AI Product Manager','Robotics Engineer','AI Ethicist'],
+    stats: { growth: '42%', avgSalary: '$135K', remoteWork: '75%', entryLevel: '1–3yr' }
+  },
+  {
+    id: 'cloud',
+    icon: '☁️',
+    name: 'Cloud Computing',
+    tagline: 'Infinite scale at your fingertips',
+    color: '#00ff88',
+    overview: 'Cloud computing delivers computing services—servers, storage, databases, networking, software, analytics—over the internet. AWS, Azure, and GCP power the modern digital economy, enabling organizations to scale globally without owning physical infrastructure.',
+    skills: ['AWS','Azure','GCP','Kubernetes','Terraform','Docker','Serverless','CI/CD','IaC','Cost Optimization'],
+    careers: ['Cloud Architect','DevOps Engineer','SRE','Cloud Security Eng','Solutions Architect','Platform Engineer','Cloud Consultant','FinOps Analyst'],
+    stats: { growth: '28%', avgSalary: '$125K', remoteWork: '85%', entryLevel: '6mo–1yr' }
+  },
+  {
+    id: 'web',
+    icon: '🌐',
+    name: 'Web Development',
+    tagline: 'Crafting the digital experience',
+    color: '#ffe600',
+    overview: 'Web development is the art of building websites and web applications. From sleek frontends using React and Vue, to powerful backends with Node.js and Python, web developers shape how billions of people interact with information and services online every day.',
+    skills: ['React','Next.js','Node.js','TypeScript','CSS/Tailwind','REST APIs','GraphQL','PostgreSQL','Git','Web Performance'],
+    careers: ['Frontend Dev','Backend Dev','Full-Stack Dev','UI Engineer','Web Designer','JAMstack Dev','API Developer','Web Architect'],
+    stats: { growth: '25%', avgSalary: '$105K', remoteWork: '90%', entryLevel: '3–12mo' }
+  },
+  {
+    id: 'data',
+    icon: '📊',
+    name: 'Data Science',
+    tagline: 'Unlocking insights from chaos',
+    color: '#a855f7',
+    overview: 'Data Science combines statistics, mathematics, and programming to extract meaningful insights from massive datasets. Data scientists power business decisions at Netflix, Google, and healthcare companies by discovering patterns invisible to the human eye.',
+    skills: ['Python','R','SQL','Pandas','Scikit-learn','Tableau','Power BI','Statistics','A/B Testing','Feature Engineering'],
+    careers: ['Data Scientist','Data Analyst','BI Developer','Analytics Engineer','Quant Analyst','Data Engineer','Research Scientist','Product Analyst'],
+    stats: { growth: '36%', avgSalary: '$120K', remoteWork: '78%', entryLevel: '6mo–2yr' }
+  },
+  {
+    id: 'devops',
+    icon: '⚙️',
+    name: 'DevOps',
+    tagline: 'Bridge between code and production',
+    color: '#ff6b00',
+    overview: 'DevOps is a culture and practice that unifies software development and IT operations. DevOps engineers automate pipelines, manage infrastructure as code, and enable organizations to ship software faster, more reliably, and at massive scale.',
+    skills: ['Docker','Kubernetes','Jenkins','GitHub Actions','Ansible','Prometheus','Grafana','Linux','Bash','Agile/Scrum'],
+    careers: ['DevOps Engineer','SRE','Platform Eng','Build Engineer','Release Manager','Cloud Ops Eng','Infrastructure Eng','Automation Eng'],
+    stats: { growth: '22%', avgSalary: '$118K', remoteWork: '82%', entryLevel: '1–2yr' }
+  },
+  {
+    id: 'iot',
+    icon: '📡',
+    name: 'IoT',
+    tagline: 'Connecting the physical world',
+    color: '#0066ff',
+    overview: 'The Internet of Things connects billions of physical devices—from smartwatches to industrial sensors—to the internet. IoT engineers build the embedded systems, protocols, and cloud backends that make smart homes, connected factories, and wearable tech possible.',
+    skills: ['Arduino','Raspberry Pi','MQTT','C/C++','Embedded Systems','Edge Computing','BLE/Zigbee','AWS IoT','Sensor Fusion','RTOS'],
+    careers: ['IoT Engineer','Embedded Developer','Hardware Engineer','IoT Architect','Edge Computing Eng','Firmware Dev','Smart City Dev','Industrial IoT Eng'],
+    stats: { growth: '30%', avgSalary: '$108K', remoteWork: '60%', entryLevel: '1–3yr' }
+  },
+  {
+    id: 'blockchain',
+    icon: '🔗',
+    name: 'Blockchain',
+    tagline: 'Decentralized trust at scale',
+    color: '#ff2244',
+    overview: 'Blockchain technology creates tamper-proof, decentralized ledgers that power cryptocurrencies, smart contracts, and DeFi. Blockchain developers build the transparent, trustless systems that are redefining finance, supply chains, healthcare, and digital ownership.',
+    skills: ['Solidity','Ethereum','Web3.js','Smart Contracts','DeFi','NFTs','Rust','Consensus Algorithms','Cryptography','Hyperledger'],
+    careers: ['Blockchain Dev','Smart Contract Auditor','DeFi Engineer','Crypto Analyst','Web3 Developer','Protocol Engineer','NFT Platform Dev','DAO Developer'],
+    stats: { growth: '18%', avgSalary: '$130K', remoteWork: '92%', entryLevel: '1–2yr' }
+  },
+  {
+    id: 'mobile',
+    icon: '📱',
+    name: 'Mobile Dev',
+    tagline: 'Billions of screens, one great app',
+    color: '#00f5ff',
+    overview: 'Mobile development creates the apps running on iOS and Android devices worldwide. From Flutter and React Native for cross-platform efficiency, to Swift and Kotlin for native performance — mobile devs craft the seamless experiences people use every single day.',
+    skills: ['Flutter','React Native','Swift','Kotlin','Xcode','Android Studio','Firebase','App Store Optimization','REST APIs','Mobile UI/UX'],
+    careers: ['iOS Developer','Android Developer','Mobile Architect','Flutter Dev','React Native Dev','Mobile QA Eng','App Monetization Eng','Mobile DevOps'],
+    stats: { growth: '24%', avgSalary: '$112K', remoteWork: '80%', entryLevel: '6mo–1.5yr' }
+  },
+  {
+    id: 'database',
+    icon: '🗄️',
+    name: 'Database Engineering',
+    tagline: 'The backbone of every application',
+    color: '#00ff88',
+    overview: 'Database engineers design, build, and optimize the data storage systems that power every digital service. From relational SQL databases to distributed NoSQL systems, they ensure data is stored securely, retrieved instantly, and scales to billions of users.',
+    skills: ['PostgreSQL','MySQL','MongoDB','Redis','Cassandra','Query Optimization','Indexing','Replication','Sharding','Database Design'],
+    careers: ['DBA','Database Architect','Data Engineer','Backend Developer','Analytics Engineer','Database Consultant','NoSQL Specialist','Cloud DB Eng'],
+    stats: { growth: '20%', avgSalary: '$110K', remoteWork: '75%', entryLevel: '6mo–2yr' }
+  },
+  {
+    id: 'networking',
+    icon: '🔌',
+    name: 'Networking',
+    tagline: 'The invisible highways of data',
+    color: '#a855f7',
+    overview: 'Networking engineers design and maintain the infrastructure that connects the internet — routers, switches, protocols, and physical cables. They ensure data flows reliably and securely between billions of devices, from enterprise WANs to global submarine cables.',
+    skills: ['TCP/IP','Cisco IOS','BGP/OSPF','SD-WAN','VLANs','Firewalls','Wireshark','Network Automation','IPv6','Load Balancing'],
+    careers: ['Network Engineer','NOC Technician','Network Architect','VoIP Engineer','SD-WAN Specialist','Telecom Engineer','Network Security Eng','Cloud Networking Eng'],
+    stats: { growth: '15%', avgSalary: '$98K', remoteWork: '55%', entryLevel: '6mo–1.5yr' }
+  },
+  {
+    id: 'gamedev',
+    icon: '🎮',
+    name: 'Game Development',
+    tagline: 'Building worlds from pure imagination',
+    color: '#ffe600',
+    overview: 'Game development combines art, programming, and design to create interactive entertainment. Game developers use Unity, Unreal Engine, and custom engines to craft everything from mobile puzzle games to massive open-world AAA titles — an industry worth over $200 billion.',
+    skills: ['Unity','Unreal Engine','C#','C++','Game Physics','3D Modeling','Shader Programming','Multiplayer Networking','Audio Design','AI Pathfinding'],
+    careers: ['Game Developer','Game Designer','3D Artist','Technical Artist','QA Tester','Engine Programmer','VR/AR Developer','Indie Game Dev'],
+    stats: { growth: '20%', avgSalary: '$95K', remoteWork: '70%', entryLevel: '1–3yr' }
+  }
+];
+
+// ─── RENDER STARS ────────────────────────────────────────────────────────────
+const starsEl = document.getElementById('stars');
+for(let i=0;i<180;i++){
+  const s = document.createElement('div');
+  s.className='star';
+  const sz = Math.random()*2.5+0.5;
+  const colors = ['#ffffff','#00f5ff','#ff00e5','#00ff88','#ffe600','#a855f7'];
+  s.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;background:${colors[Math.floor(Math.random()*colors.length)]};--d:${Math.random()*3+1.5}s;animation-delay:${Math.random()*3}s;`;
+  starsEl.appendChild(s);
+}
+
+// ─── RENDER CONFETTI ─────────────────────────────────────────────────────────
+const confEl = document.getElementById('confetti');
+const confColors = ['#00f5ff','#ff00e5','#00ff88','#ffe600','#a855f7','#ff6b00'];
+for(let i=0;i<60;i++){
+  const c = document.createElement('div');
+  c.className='conf';
+  c.style.cssText=`left:${Math.random()*100}%;top:${-(Math.random()*20)}%;background:${confColors[i%confColors.length]};box-shadow:0 0 4px ${confColors[i%confColors.length]};--cf:${Math.random()*8+6}s;animation-delay:${Math.random()*10}s;`;
+  confEl.appendChild(c);
+}
+
+// ─── CURSOR ───────────────────────────────────────────────────────────────────
+const cursor = document.getElementById('cursor');
+const dot = document.getElementById('cursor-dot');
+let mx=0,my=0,cx=0,cy=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;dot.style.left=mx+'px';dot.style.top=my+'px';});
+(function animCursor(){
+  cx+=(mx-cx)*0.12; cy+=(my-cy)*0.12;
+  cursor.style.left=cx+'px'; cursor.style.top=cy+'px';
+  requestAnimationFrame(animCursor);
+})();
+
+// ─── RENDER CARDS ────────────────────────────────────────────────────────────
+function hexFaint(hex){ return hex+'22'; }
+function renderCards(filter=''){
+  const grid = document.getElementById('domainGrid');
+  grid.innerHTML='';
+  const filtered = domains.filter(d=>
+    d.name.toLowerCase().includes(filter.toLowerCase()) ||
+    d.tagline.toLowerCase().includes(filter.toLowerCase()) ||
+    d.skills.some(s=>s.toLowerCase().includes(filter.toLowerCase()))
+  );
+  filtered.forEach((d,i)=>{
+    const card = document.createElement('div');
+    card.className='domain-card';
+    card.style.cssText=`--clr1:${d.color};--clr2:${hexFaint(d.color)};animation-delay:${i*0.07}s;`;
+
+    // Glitter particles
+    let glitters='<div class="card-glitter">';
+    for(let g=0;g<12;g++){
+      glitters+=`<div class="glitter-p" style="left:${Math.random()*100}%;top:${Math.random()*100}%;--gd:${Math.random()*2+1.5}s;--go:${Math.random()*0.7+0.3};animation-delay:${Math.random()*2}s;background:${d.color};box-shadow:0 0 4px ${d.color};"></div>`;
+    }
+    glitters+='</div>';
+
+    card.innerHTML=`
+      ${glitters}
+      <span class="domain-icon">${d.icon}</span>
+      <div class="domain-name">${d.name}</div>
+      <div class="domain-tagline">${d.tagline}</div>
+      <div class="card-arrow">↗</div>
+    `;
+    card.addEventListener('click',()=>openModal(d));
+    grid.appendChild(card);
+  });
+}
+renderCards();
+
+// ─── SEARCH ──────────────────────────────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input',e=>renderCards(e.target.value));
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+function openModal(d){
+  const overlay = document.getElementById('modal-overlay');
+  const modal = document.getElementById('modal');
+  const content = document.getElementById('modal-content');
+
+  modal.style.setProperty('--modal-clr', d.color);
+  modal.style.setProperty('--modal-clr-faint', d.color+'11');
+  modal.style.scrollbarColor=`${d.color} transparent`;
+
+  const skillTags = d.skills.map(s=>`<span class="skill-tag">${s}</span>`).join('');
+  const careerItems = d.careers.map(c=>`<div class="career-item">${c}</div>`).join('');
+
+  content.innerHTML=`
+    <div class="modal-header">
+      <span class="modal-icon">${d.icon}</span>
+      <div>
+        <div class="modal-title">${d.name}</div>
+        <div class="modal-tagline">${d.tagline}</div>
+      </div>
+    </div>
+    <div class="modal-divider"></div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">// Overview</div>
+      <p>${d.overview}</p>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">// Market Stats</div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-value">${d.stats.growth}</div><div class="stat-label">Job Growth</div></div>
+        <div class="stat-box"><div class="stat-value">${d.stats.avgSalary}</div><div class="stat-label">Avg Salary</div></div>
+        <div class="stat-box"><div class="stat-value">${d.stats.remoteWork}</div><div class="stat-label">Remote Jobs</div></div>
+        <div class="stat-box"><div class="stat-value">${d.stats.entryLevel}</div><div class="stat-label">Entry Level</div></div>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">// Key Skills to Learn</div>
+      <div class="skills-grid">${skillTags}</div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">// Career Paths</div>
+      <div class="career-list">${careerItems}</div>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('modal-overlay')) closeModal();
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+</script>
+</body>
+</html>
